@@ -171,11 +171,11 @@ def generate_corruption_report(
 
         note = "Đạt chuẩn"
         if not cr.get("success"):
-            if exp_name == "ExpectColumnValuesToBeUnique":
+            if exp_name == "expect_column_values_to_be_unique":
                 note = "Bắt lỗi `duplicate_rows`"
-            elif exp_name == "ExpectColumnValueLengthsToBeBetween" and col_name == "summary":
+            elif exp_name == "expect_column_value_lengths_to_be_between" and col_name == "summary":
                 note = "Bắt lỗi `blank_summary`"
-            elif exp_name == "ExpectColumnValueLengthsToBeBetween" and col_name == "title":
+            elif exp_name == "expect_column_value_lengths_to_be_between" and col_name == "title":
                 note = "Bắt lỗi `truncate_title`"
             else:
                 note = "Vi phạm ngưỡng schema"
