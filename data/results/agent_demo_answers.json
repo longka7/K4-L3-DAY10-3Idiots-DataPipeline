@@ -1,0 +1,10 @@
+[
+  {
+    "question": "What is the main contribution of the paper 'Continuous Benchmark Evaluation for Enterprise Retrieval Pipelines'?",
+    "answer": "The main contribution of the paper \"Continuous Benchmark Evaluation for Enterprise Retrieval Pipelines\" is the development of a **synthetic test generator** designed to address the limitations of static benchmarks in enterprise environments.\n\nSpecifically, the authors address the issue of \"domain drift\" in enterprise knowledge bases, where static evaluation sets become outdated as new data is ingested. Their solution automatically creates paired evaluation sets whenever new corpora are added to the pipeline, allowing for continuous and adaptive evaluation of retrieval performance."
+  },
+  {
+    "question": "Who authored the paper 'Multi-Agent Consensus for High-Stakes Fact Verification'?",
+    "answer": "The paper \"Multi-Agent Consensus for High-Stakes Fact Verification\" was authored by Phong Vu and Ngan Hoang."
+  }
+]
