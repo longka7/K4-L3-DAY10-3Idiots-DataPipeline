@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from statistics import mean
 import os
 import sys
+import time
 import types
 from typing import Any
 
@@ -16,6 +17,9 @@ from retrieval.embeddings import MiniLMEmbeddings
 from retrieval.index import LocalEmbeddingIndex
 from retrieval.llm import build_llm
 from retrieval.qa import answer_question
+
+
+JUDGE_RETRIES = 3
 
 
 class JudgeVerdict(BaseModel):
@@ -60,7 +64,14 @@ Return:
 """.strip()
     try:
         llm = build_llm(settings=settings, temperature=0.0).with_structured_output(JudgeVerdict)
-        return llm.invoke(prompt)
+        # Retry loi mang tam thoi (disconnect/429) truoc khi roi ve heuristic judge.
+        for attempt in range(JUDGE_RETRIES):
+            try:
+                return llm.invoke(prompt)
+            except Exception:
+                if attempt == JUDGE_RETRIES - 1:
+                    raise
+                time.sleep(2 * (attempt + 1))
     except Exception:
         score = 5 if _token_f1(reference, prediction) >= 0.95 else 3 if _token_f1(reference, prediction) >= 0.5 else 1
         return JudgeVerdict(
