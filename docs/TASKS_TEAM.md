@@ -4,12 +4,16 @@ Repo nhóm: https://github.com/longka7/K4-L3-DAY10-3Idiots-DataPipeline
 
 | Thành viên | Phần việc | File sở hữu (chỉ sửa file của mình) |
 |---|---|---|
-| **TV1 – Trưởng nhóm** | CP0, CP1-cleaning, CP3: ingestion, cleaning, pipeline Phase 1 | `src/ingestion/crossref.py`, `src/ingestion/cleaning.py`, `src/pipelines/phase1.py`, `generate_phase1_report()` trong `src/observability/reporting.py` |
-| **TV2 – Corruption & Repair** | CP4, CP5 (+ bonus B2) | `src/ingestion/corruption.py`, `src/pipelines/corruption_flow.py`, `generate_corruption_report()` trong `src/observability/reporting.py` |
-| **TV3 – Observability & Evaluation** | CP1-quality, CP2 (+ bonus B1) | `src/observability/quality.py`, `src/evaluation/testset.py`, `app/dashboard.py` (bonus) |
+| **TV1 – Trưởng nhóm** | CP0–CP3: ingestion, cleaning, quality gate GX 1.x, test set, pipeline Phase 1 — **ĐÃ XONG** | `src/ingestion/crossref.py`, `src/ingestion/cleaning.py`, `src/observability/quality.py`, `src/evaluation/testset.py`, `src/pipelines/phase1.py`, `generate_phase1_report()` |
+| **TV2 – Repair & Comparison** | CP5: corruption flow, repair idempotent, báo cáo 3 trạng thái (+ bonus B2) | `src/pipelines/corruption_flow.py`, `generate_corruption_report()` trong `src/observability/reporting.py` |
+| **TV3 – Corruption Suite** | CP4: tiêm 6 lỗi dữ liệu (+ bonus B1 dashboard) | `src/ingestion/corruption.py`, `app/dashboard.py` (bonus) |
 
-Thứ tự phụ thuộc: TV1 push `cleaning.py` + `data/clean/papers_clean.json` trước → TV3 chạy thử được → TV1 chạy `run_phase1.py` → TV2 chạy `run_corruption_flow.py`.
-Tuy nhiên **ai cũng có thể code ngay từ bây giờ** dựa trên "Hợp đồng dữ liệu" bên dưới.
+**Trạng thái hiện tại:** Phase 1 đã chạy xong trên `main` (`python script/run_phase1.py` exit 0; baseline hit_rate = 1.0, token_f1 = 1.0).
+Đã có sẵn: `data/clean/papers_clean.json`, `data/eval/test_set.json` (10 câu, CỐ ĐỊNH — không tạo lại), `data/results/baseline_metrics.json`, `data/quality/baseline_quality_report.json`.
+
+Thứ tự: TV3 push `corruption.py` → TV2 chạy `run_corruption_flow.py` end-to-end. TV2 có thể code `corruption_flow.py` song song ngay bây giờ.
+
+**LLM:** dùng `LLM_MODEL=gemini-3.1-flash-lite` (bản `gemini-2.5-flash` đã bị Google ngừng cho user mới; `gemini-3.8-flash` free tier chỉ 20 request/ngày). Kiểm tra LLM judge có chạy thật không: trong `data/results/*_answers.json`, `judge.reasoning` KHÔNG được là "Fallback heuristic judge...".
 
 ---
 
@@ -54,31 +58,16 @@ Snapshot gốc: 24 bài báo, bài cũ nhất ~181 ngày, summary ngắn nhất 
 ---
 ---
 
-## 📋 PROMPT CHO TV2 — Corruption & Repair (copy nguyên khối dưới vào AI assistant)
+## 📋 PROMPT CHO TV2 — Repair & Comparison (copy nguyên khối dưới vào AI assistant)
 
 ````text
 Tôi là thành viên TV2 nhóm 3Idiots, làm bài lab "Day 10 — Data Pipeline & Data Observability" (VinUni AI20k K4).
 Repo: https://github.com/longka7/K4-L3-DAY10-3Idiots-DataPipeline (Python 3.11–3.13, package trong src/, cài bằng `uv sync` hoặc `pip install -e .`).
 Hãy đọc trước: README.md, docs/Guide.md (Bước 7–8), docs/CHECKPOINTS.md (CP4, CP5), docs/RUBRIC.md (tiêu chí 8), docs/TASKS_TEAM.md (mục "HỢP ĐỒNG DỮ LIỆU CHUNG"), cùng các file src/core/config.py, src/core/utils.py, src/retrieval/index.py, src/retrieval/qa.py, src/evaluation/metrics.py.
 
-NHIỆM VỤ: chỉ sửa 3 chỗ sau, không sửa file khác của thành viên khác.
+NHIỆM VỤ: chỉ sửa 2 chỗ sau (corruption.py do TV3 viết, quality/testset/phase1 do TV1 đã viết xong), không sửa file khác của thành viên khác.
 
-1) src/ingestion/corruption.py — hàm `corrupt_clean_dataframe(df, output_log_path) -> pd.DataFrame`
-   - Deterministic: dùng `random_state=42` / `numpy.random.default_rng(42)`, KHÔNG sửa df gốc (làm trên `df.copy()`).
-   - Tiêm đủ 6 lỗi theo thứ tự, mỗi lỗi chọn tập dòng riêng:
-     a. drop_latest_records: bỏ 20% bài có `published` mới nhất (24 bài → bỏ 5).
-     b. blank_summary: đặt `summary = ""` cho ~15% dòng.
-     c. inject_noise: chèn chuỗi rác (ví dụ "@@##%% lorem ipsum ¤¤ ###") và xáo trộn/thay từ trong `summary` cho ~15% dòng.
-     d. truncate_title: cắt `title` còn < 8 ký tự (ví dụ `title[:7]`) cho ~15% dòng.
-     e. stale_date: lùi `published` về 365 ngày trước cho ĐỦ nhiều dòng (≥ 35%) để Freshness SLA bật cảnh báo (ngưỡng: > 25% bài có age_days > 180).
-     f. duplicate_rows: nhân bản ~20% dòng (giữ nguyên paper_id → vi phạm unique).
-   - Sau cùng gọi `rebuild_derived_columns(df, run_date=now_utc())` từ `ingestion.cleaning` để tính lại age_days, summary_chars, text_for_embedding.
-   - Ghi log bằng `write_json(output_log_path, log)` với log là list 6 phần tử:
-     `{"step": 1, "corruption": "drop_latest_records", "description": "...", "affected_paper_ids": [...], "rows_before": int, "rows_after": int}`.
-   - Tín hiệu hoàn thành:
-     python -c "from core.config import load_settings; from ingestion.corruption import corrupt_clean_dataframe; import pandas as pd; s=load_settings(); df=pd.read_json(s.paths.clean_json); c=corrupt_clean_dataframe(df, s.paths.corruption_log); print(f'Tín hiệu hoàn thành: Corrupted {len(c)} dòng')"
-
-2) src/pipelines/corruption_flow.py — hàm `main()` (chạy qua `python script/run_corruption_flow.py`, exit code 0)
+1) src/pipelines/corruption_flow.py — hàm `main()` (chạy qua `python script/run_corruption_flow.py`, exit code 0)
    Các bước:
    a. settings = load_settings(); đọc `settings.paths.baseline_metrics` và `pd.read_json(settings.paths.clean_json)` (nếu chưa có thì báo lỗi rõ ràng: "Hãy chạy script/run_phase1.py trước").
    b. CORRUPTED: `corrupt_clean_dataframe(clean_df, settings.paths.corruption_log)` → lưu `settings.paths.corrupted_clean_csv` + `corrupted_clean_json` (json dạng `orient="records"`, list → giữ nguyên).
@@ -90,7 +79,7 @@ NHIỆM VỤ: chỉ sửa 3 chỗ sau, không sửa file khác của thành viê
    - Idempotent: chạy lệnh 2 lần liên tiếp phải ra cùng kết quả repaired (không phụ thuộc lần chạy trước).
    - Mỗi state dùng 1 Chroma collection riêng: papers-baseline / papers-corrupted / papers-repaired (index.py tự suy ra tên từ embeddings_output_path).
 
-3) src/observability/reporting.py — CHỈ viết hàm `generate_corruption_report(...)` (hàm generate_phase1_report là của TV1)
+2) src/observability/reporting.py — CHỈ viết hàm `generate_corruption_report(...)` (hàm generate_phase1_report là của TV1)
    Markdown ghi bằng `write_text(report_path, md)`, gồm:
    - Bảng so sánh 3 trạng thái: metric | Baseline | Corrupted | Repaired | Δ(Corrupted−Baseline) | Δ(Repaired−Baseline).
    - Bảng Quality Gate: từng expectation pass/fail cho Corrupted vs Repaired; Freshness (stale_rows/total_rows, is_fresh).
@@ -103,13 +92,15 @@ RÀNG BUỘC:
 - Dùng settings.paths.*, không hardcode đường dẫn tuyệt đối. Không commit file .env.
 - Tôi phải hiểu và giải thích được từng dòng code (sẽ bị hỏi khi demo). Thêm comment ngắn ở chỗ quan trọng.
 - Chỉ sửa đúng các hàm/file nêu trên để tránh conflict với TV1, TV3.
-- Nếu hàm của TV1/TV3 (cleaning, quality, testset, phase1) chưa có trên main, hãy code theo hợp đồng trong docs/TASKS_TEAM.md; test end-to-end sau khi họ push.
+- `corrupt_clean_dataframe(df, output_log_path)` của TV3: nếu chưa có trên main thì code theo chữ ký này, test end-to-end sau khi TV3 push.
+- Dùng sẵn: `run_data_quality_checks`, `build_freshness_report` (observability.quality), `load_raw_records` (ingestion.crossref), `build_clean_dataframe` (ingestion.cleaning), `save_clean_artifacts(df, csv_path, json_path)` (pipelines.phase1), hàm `_fmt` trong reporting.py.
+- Free tier Gemini có giới hạn request/ngày: mỗi lần chạy flow tốn ~20 lời gọi LLM judge — đừng chạy lại liên tục khi debug (đặt tạm LLM_PROVIDER=mock để debug logic, nhớ chạy lại bằng gemini trước khi commit số liệu).
 
 GIT:
 git config user.name "<tên GitHub của tôi>"; git config user.email "<email GitHub của tôi>"   # để được tính vào Insights > Contributors
 git pull --rebase origin main   # trước mỗi lần commit
 git add <chỉ file của tôi>; git commit -m "feat(corruption): ..."; git push origin main
-Commit nhỏ, nhiều lần (corruption.py, rồi corruption_flow.py, rồi report) — không gộp 1 commit khổng lồ.
+Commit nhỏ, nhiều lần (corruption_flow.py, rồi report, rồi artifacts data/) — không gộp 1 commit khổng lồ.
 ````
 
 Sau khi xong code, TV2 tự làm thêm:
@@ -119,83 +110,53 @@ Sau khi xong code, TV2 tự làm thêm:
 ---
 ---
 
-## 📋 PROMPT CHO TV3 — Observability & Evaluation (copy nguyên khối dưới vào AI assistant)
+## 📋 PROMPT CHO TV3 — Corruption Suite (copy nguyên khối dưới vào AI assistant)
 
 ````text
 Tôi là thành viên TV3 nhóm 3Idiots, làm bài lab "Day 10 — Data Pipeline & Data Observability" (VinUni AI20k K4).
 Repo: https://github.com/longka7/K4-L3-DAY10-3Idiots-DataPipeline (Python 3.11–3.13, package trong src/, cài bằng `uv sync` hoặc `pip install -e .`).
-Hãy đọc trước: README.md, docs/Guide.md (Bước 4–5), docs/CHECKPOINTS.md (CP1, CP2), docs/RUBRIC.md (tiêu chí 6, 7), docs/TASKS_TEAM.md (mục "HỢP ĐỒNG DỮ LIỆU CHUNG"), cùng src/core/config.py, src/core/utils.py, src/retrieval/qa.py, src/evaluation/metrics.py.
+Hãy đọc trước: README.md, docs/Guide.md (Bước 7), docs/CHECKPOINTS.md (CP4), docs/RUBRIC.md (tiêu chí 8), docs/TASKS_TEAM.md (mục "HỢP ĐỒNG DỮ LIỆU CHUNG"), cùng src/ingestion/cleaning.py, src/observability/quality.py, src/evaluation/testset.py, src/core/utils.py.
 
-NHIỆM VỤ: chỉ sửa 2 file sau (+ bonus), không sửa file của thành viên khác.
+NHIỆM VỤ: chỉ sửa src/ingestion/corruption.py (+ bonus), không sửa file của thành viên khác.
 
-1) src/observability/quality.py
+src/ingestion/corruption.py — hàm `corrupt_clean_dataframe(df, output_log_path) -> pd.DataFrame`
+   - Deterministic: dùng `numpy.random.default_rng(42)` / `random_state=42`, KHÔNG sửa df gốc (làm trên `df.copy()`).
+   - Tiêm đủ 6 lỗi theo thứ tự, mỗi lỗi chọn tập dòng riêng (không chồng lên nhau khi có thể):
+     a. drop_latest_records: bỏ 20% bài có `published` mới nhất (24 bài → bỏ 5). Mô phỏng ingestion fail → stale data.
+     b. blank_summary: đặt `summary = ""` cho ~15% dòng còn lại.
+     c. inject_noise: chèn chuỗi rác (ví dụ "@@##%% lorem ipsum ¤¤ ###") và thay/xáo trộn từ trong `summary` cho ~15% dòng.
+     d. truncate_title: cắt `title` còn < 8 ký tự (ví dụ `title[:7]`) cho ~15% dòng.
+     e. stale_date: lùi `published` về 365 ngày (giữ format "YYYY-MM-DD") cho ĐỦ nhiều dòng (≥ 35%) để Freshness SLA bật cảnh báo
+        (quality.py: is_fresh=False khi > 25% bài có age_days > 180).
+     f. duplicate_rows: nhân bản ~20% dòng (giữ nguyên paper_id → vi phạm ExpectColumnValuesToBeUnique).
+   - Sau cùng gọi `rebuild_derived_columns(df, run_date=now_utc())` từ `ingestion.cleaning` để tính lại age_days, summary_chars, text_for_embedding (now_utc từ core.utils).
+   - Ghi log bằng `write_json(output_log_path, log)` với log là list 6 phần tử:
+     {"step": 1, "corruption": "drop_latest_records", "description": "...", "affected_paper_ids": [...], "rows_before": int, "rows_after": int}
+   - Return corrupted df (giữ đủ cột như hợp đồng dữ liệu).
 
- a) `run_data_quality_checks(df, settings, report_name) -> dict`
-   - BẮT BUỘC dùng cú pháp Great Expectations 1.x (dùng cú pháp cũ như context.sources.pandas_default sẽ bị trừ 10 điểm):
-       import great_expectations as gx
-       context = gx.get_context(mode="ephemeral")
-       data_source = context.data_sources.add_pandas(name="papers_source")
-       data_asset = data_source.add_dataframe_asset(name="papers_asset")
-       batch_def = data_asset.add_batch_definition_whole_dataframe("papers_batch")
-       batch = batch_def.get_batch(batch_parameters={"dataframe": df})
-   - Chỉ validate các cột scalar (bỏ cột list `authors`, `categories` trước khi đưa vào GX để tránh lỗi hash).
-   - 4 nhóm expectation (gx.expectations.*):
-       ExpectTableRowCountToBeBetween(min_value=5, max_value=5000)
-       ExpectColumnValuesToNotBeNull cho paper_id, title, text_for_embedding
-       ExpectColumnValuesToBeUnique(column="paper_id")
-       ExpectColumnValueLengthsToBeBetween(column="summary", min_value=30)
-     (có thể thêm: title length ≥ 8 — để bắt lỗi truncate title.)
-   - Gom vào 1 ExpectationSuite rồi validate batch (context.suites.add(...), batch.validate(suite)).
-   - Trả về dict JSON-serializable (ép numpy int/bool về int/bool của Python):
-       {"report_name": ..., "success": bool, "row_count": int,
-        "results": [{"expectation": "expect_column_values_to_be_unique", "column": "paper_id", "success": bool, "unexpected_count": int|None}, ...],
-        "freshness": {...kết quả build_freshness_report...}}
-   - Ghi ra `settings.paths.quality_dir / f"{report_name}_quality_report.json"` bằng write_json
-     (report_name dùng trong lab: "baseline", "corrupted", "repaired" → khớp settings.paths.baseline_quality_report / corrupted_quality_report).
-   - Freshness trong hàm này: gọi build_freshness_report với path `settings.paths.quality_dir / f"{report_name}_freshness_report.json"`; riêng report_name=="baseline" dùng `settings.paths.freshness_report`.
-     `success` của quality chỉ phụ thuộc 4 expectation (freshness là cảnh báo riêng).
-
- b) `build_freshness_report(df, settings, report_path) -> dict`
-   - Dùng `settings.freshness_threshold_days` (=180). stale = age_days > 180.
-   - Payload: {"latest_published": "YYYY-MM-DD", "oldest_published": "YYYY-MM-DD", "stale_rows": int, "total_rows": int,
-               "stale_ratio": float, "threshold_days": 180, "max_stale_ratio": 0.25, "is_fresh": stale_ratio <= 0.25}
-   - Ghi JSON ra report_path, return payload.
-
-   Tín hiệu hoàn thành (dữ liệu sạch → True):
-   python -c "from core.config import load_settings; from observability.quality import run_data_quality_checks; import pandas as pd; s=load_settings(); df=pd.read_json(s.paths.clean_json); res=run_data_quality_checks(df, s, 'test'); print(f'Tín hiệu hoàn thành: Quality check status = {res[\"success\"]}')"
-   Tự test thêm: nhân đôi 1 dòng hoặc set summary="" → success phải False.
-
-2) src/evaluation/testset.py — `build_test_set(df, output_path) -> list[dict]`
-   - Kiểm tra df có ≥ 10 dòng, nếu không raise ValueError.
-   - Deterministic (không random không seed). Chọn 10 bài trải đều theo thời gian, BẮT BUỘC có mặt ít nhất 3 trong 5 bài `published` mới nhất
-     (để khi TV2 xoá 20% bài mới nhất thì hit rate giảm thấy rõ).
-   - 10 câu, phân bố: 3 summary, 3 authors, 2 date, 2 categories. Tiêu đề bài báo đặt trong dấu nháy đơn '...' (qa.py dùng regex '([^']+)' để lookup chính xác).
-   - Câu hỏi PHẢI chứa đúng cụm từ khoá mà src/retrieval/qa.py nhận diện, và ground_truth phải khớp đúng field qa.py trả về:
-       summary    : "What is the main contribution of the paper '<title>'?"   → ground_truth = first_sentence(summary)   (from core.utils import first_sentence)
-       authors    : "Who authored the paper '<title>'?"                        → ground_truth = authors_joined
-       date       : "When was the paper '<title>' published?"                 → ground_truth = published  (YYYY-MM-DD)
-       categories : "What categories does the paper '<title>' belong to?"     → ground_truth = categories_joined
-   - Mỗi item: {"id": "eval_001", "question_type": "summary", "question": ..., "ground_truth": ..., "ground_truth_doc_ids": [paper_id]}
-   - write_json(output_path, items); return items.
    Tín hiệu hoàn thành:
-   python -c "from core.config import load_settings; from evaluation.testset import build_test_set; import pandas as pd; s=load_settings(); df=pd.read_json(s.paths.clean_json); ts=build_test_set(df, s.paths.eval_testset); print(f'Tín hiệu hoàn thành: Sinh được {len(ts)} câu hỏi test')"
+   python -c "from core.config import load_settings; from ingestion.corruption import corrupt_clean_dataframe; import pandas as pd; s=load_settings(); df=pd.read_json(s.paths.clean_json); c=corrupt_clean_dataframe(df, s.paths.corruption_log); print(f'Tín hiệu hoàn thành: Corrupted {len(c)} dòng')"
 
-BONUS B1 (+5, làm sau khi phần chính chạy được): app/dashboard.py bằng Streamlit (`uv add streamlit`), chạy `streamlit run app/dashboard.py`:
+   Tự kiểm tra thêm: Quality Gate PHẢI bắt được lỗi:
+   python -c "from core.config import load_settings; from ingestion.corruption import corrupt_clean_dataframe; from observability.quality import run_data_quality_checks; import pandas as pd; s=load_settings(); df=pd.read_json(s.paths.clean_json); c=corrupt_clean_dataframe(df, s.paths.corruption_log); r=run_data_quality_checks(c, s, 'tv3check'); print('success =', r['success'], '| fresh =', r['freshness']['is_fresh']); print([(x['expectation'], x['column'], x['unexpected_count']) for x in r['results'] if not x['success']])"
+   → kỳ vọng success = False, fresh = False, fail ở unique paper_id, summary length, title length. Xoá file data/quality/tv3check_* sau khi test.
+   Chạy 2 lần phải ra cùng kết quả (deterministic).
+
+BONUS B1 (+5, làm sau khi phần chính xong): app/dashboard.py bằng Streamlit (`uv add streamlit`), chạy `streamlit run app/dashboard.py`:
    - Trạng thái Quality Gate (baseline/corrupted/repaired) từ data/quality/*_quality_report.json: mỗi expectation xanh/đỏ.
-   - Biểu đồ histogram age_days (clean vs corrupted) + đường ngưỡng 180 ngày; badge is_fresh.
+   - Histogram age_days (clean vs corrupted) + đường ngưỡng 180 ngày; badge is_fresh.
    - Bảng + bar chart so sánh metrics từ data/results/{baseline,corrupted,repaired}_metrics.json.
-   - Dùng đường dẫn tương đối qua core.config.load_settings(), xử lý khi file chưa tồn tại (hiện hướng dẫn chạy pipeline).
+   - Dùng đường dẫn qua core.config.load_settings(), xử lý khi file chưa tồn tại (hiện hướng dẫn chạy pipeline).
 
 RÀNG BUỘC:
 - Dùng settings.paths.*, không hardcode đường dẫn tuyệt đối. Không commit file .env.
-- Tôi phải hiểu và giải thích được từng dòng code (sẽ bị hỏi về GX 1.x, Freshness SLA khi demo). Thêm comment ngắn ở chỗ quan trọng.
-- Nếu data/clean/papers_clean.json chưa có trên main (TV1 chưa push), tạm tự tạo df test nhỏ theo hợp đồng cột trong docs/TASKS_TEAM.md.
+- Tôi phải hiểu và giải thích được từng dòng code (sẽ bị hỏi khi demo: vì sao mỗi lỗi gây Silent Failure, Quality Gate bắt được lỗi nào, lỗi nào GX KHÔNG bắt được — ví dụ inject_noise và drop_latest_records). Thêm comment ngắn ở chỗ quan trọng.
 
 GIT:
 git config user.name "<tên GitHub của tôi>"; git config user.email "<email GitHub của tôi>"   # để được tính vào Insights > Contributors
 git pull --rebase origin main   # trước mỗi lần commit
-git add <chỉ file của tôi>; git commit -m "feat(quality): ..."; git push origin main
-Commit nhỏ, nhiều lần (quality.py, rồi testset.py, rồi dashboard) — không gộp 1 commit khổng lồ.
+git add <chỉ file của tôi>; git commit -m "feat(corruption): ..."; git push origin main
+Commit nhỏ, nhiều lần — không gộp 1 commit khổng lồ.
 ````
 
 Sau khi xong code, TV3 tự làm thêm:
