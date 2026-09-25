@@ -1,0 +1,81 @@
+[
+  {
+    "step": 1,
+    "corruption": "drop_latest_records",
+    "description": "Dropped 5 most recently published papers.",
+    "affected_paper_ids": [
+      "10.1145/3637528.3671812",
+      "10.1145/3637528.3671808",
+      "10.1145/3637528.3671804",
+      "10.1145/3637528.3671807",
+      "10.1145/3637528.3671802"
+    ],
+    "rows_before": 24,
+    "rows_after": 19
+  },
+  {
+    "step": 2,
+    "corruption": "blank_summary",
+    "description": "Set summary to empty string.",
+    "affected_paper_ids": [
+      "10.1145/3637528.3671816",
+      "10.1145/3637528.3671811",
+      "10.1145/3637528.3671803"
+    ],
+    "rows_before": 19,
+    "rows_after": 19
+  },
+  {
+    "step": 3,
+    "corruption": "inject_noise",
+    "description": "Shuffled words and inserted junk tokens into summary.",
+    "affected_paper_ids": [
+      "10.1145/3637528.3671818",
+      "10.1145/3637528.3671815",
+      "10.1145/3637528.3671813"
+    ],
+    "rows_before": 19,
+    "rows_after": 19
+  },
+  {
+    "step": 4,
+    "corruption": "truncate_title",
+    "description": "Truncated title to 7 characters.",
+    "affected_paper_ids": [
+      "10.1145/3637528.3671821",
+      "10.1145/3637528.3671819",
+      "10.1145/3637528.3671805"
+    ],
+    "rows_before": 19,
+    "rows_after": 19
+  },
+  {
+    "step": 5,
+    "corruption": "stale_date",
+    "description": "Shifted published date back 365 days.",
+    "affected_paper_ids": [
+      "10.1145/3637528.3671824",
+      "10.1145/3637528.3671822",
+      "10.1145/3637528.3671810",
+      "10.1145/3637528.3671820",
+      "10.1145/3637528.3671814",
+      "10.1145/3637528.3671806",
+      "10.1145/3637528.3671809"
+    ],
+    "rows_before": 19,
+    "rows_after": 19
+  },
+  {
+    "step": 6,
+    "corruption": "duplicate_rows",
+    "description": "Appended 4 duplicated rows with the same paper_id.",
+    "affected_paper_ids": [
+      "10.1145/3637528.3671822",
+      "10.1145/3637528.3671821",
+      "10.1145/3637528.3671818",
+      "10.1145/3637528.3671813"
+    ],
+    "rows_before": 19,
+    "rows_after": 23
+  }
+]
