@@ -11,7 +11,7 @@
 | STT | Họ và tên | MSSV | Email | Vai trò & Phân công công việc | Báo cáo cá nhân |
 |---:|---|---|---|---|---|
 | 1 | | | | Trưởng nhóm / Pipeline Integrator (`core/`, `phase1.py`, `corruption_flow.py`) | `report/<MSSV1>_HoTen.md` |
-| 2 | | | | Data Foundation & Recovery (`crossref.py`, `cleaning.py`, raw data) | `report/<MSSV2>_HoTen.md` |
+| 2 | Nguyễn Văn An | 2A202602776 | nva2004gl81@gmail.com | TV2: Flow Orchestration, Repair & Comparison (`corruption_flow.py`, `reporting.py`, Bonus B2) | `report/2A202602776_NguyenVanAn.md` |
 | 3 | | | | RAG & Vector Index (`retrieval/index.py`, `embeddings.py`, ChromaDB) | `report/<MSSV3>_HoTen.md` |
 | 4 | | | | Observability & Evaluation (`quality.py` GX 1.x, `testset.py`, reporting) | `report/<MSSV4>_HoTen.md` |
 
@@ -30,14 +30,16 @@
 - **Điều học được / Đóng góp chính:**
   - Hiểu sâu sắc về thiết kế Idempotent Pipeline và quản lý trạng thái luồng dữ liệu đa tầng.
 
-### ## HoVaTen2-MSSV2
-- **Vai trò:** Phụ trách Ingestion, Làm sạch & Phục hồi dữ liệu.
+### ## NguyenVanAn-2A202602776
+- **Vai trò:** TV2 – Flow Orchestration, Repair & Comparison (+ Bonus B2 Self-Healing).
 - **Công việc chi tiết đã hoàn thành:**
-  - Xây dựng module thu thập Crossref API với cơ chế Fallback offline trong `src/ingestion/crossref.py`.
-  - Chuẩn hóa schema, tính toán trường `age_days` và `text_for_embedding` trong `src/ingestion/cleaning.py`.
-  - Thực thi cơ chế Idempotent Repair phục hồi dữ liệu từ raw snapshot.
+  - Xây dựng luồng thực thi trong `src/pipelines/corruption_flow.py`: điều phối tiêm lỗi, kiểm soát Data Quality Gate (GX 1.x) & Freshness SLA, index collection `papers-corrupted` để chứng minh Silent Failure.
+  - Thiết kế và lập trình cơ chế Idempotent Repair & Bonus B2 (Self-Healing): phát hiện lỗi tự động rollback về nguồn gốc `crossref_records.json`, tái tạo độc lập qua `build_clean_dataframe`, cách ly collection lỗi và thăng cấp `papers-repaired` làm serving collection.
+  - Triển khai hàm `generate_corruption_report` trong `src/observability/reporting.py`: xuất báo cáo Markdown đối chiếu 3 trạng thái đầy đủ cột Delta, bảng chi tiết từng Expectation, bảng Freshness SLA, tóm tắt 6 lỗi và phân tích chuyên sâu.
+  - Đảm bảo tính đẳng biến (Idempotent) của toàn bộ quy trình và xuất bảng so sánh 3 cột trên console.
 - **Điều học được / Đóng góp chính:**
-  - Kỹ thuật truy vết nguồn gốc dữ liệu (Data Lineage) và bảo toàn raw snapshot trước khi biến đổi.
+  - Hiểu sâu sắc bản chất hiểm họa Silent Failure khi dữ liệu bị lỗi nhưng AI Agent không báo đỏ.
+  - Nắm vững nguyên tắc Data Lineage và thiết kế Idempotent Pipeline để khôi phục dữ liệu an toàn từ Raw Source of Truth.
 
 ### ## HoVaTen3-MSSV3
 - **Vai trò:** Phụ trách RAG, Vector Database & Embedding.
