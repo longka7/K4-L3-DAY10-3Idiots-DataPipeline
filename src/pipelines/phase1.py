@@ -34,13 +34,20 @@ def _load_or_build_test_set(df: pd.DataFrame, settings: Settings) -> list[dict[s
     return build_test_set(df, settings.paths.eval_testset)
 
 
+def _as_text(content: Any) -> str:
+    """Gemini 3.x tra content dang list block [{type: text, text: ...}] -> ghep lai thanh chuoi."""
+    if isinstance(content, list):
+        return "".join(block.get("text", "") if isinstance(block, dict) else str(block) for block in content)
+    return str(content)
+
+
 def _run_agent_demo(settings: Settings, index: LocalEmbeddingIndex, test_set: list[dict[str, Any]]) -> None:
     """Demo LLM agent (tool-calling) tren vai cau hoi. Loi LLM khong duoc lam hong pipeline."""
     demo: list[dict[str, Any]] = []
     try:
         agent = build_agent(settings, index)
         for item in test_set[:DEMO_QUESTIONS]:
-            demo.append({"question": item["question"], "answer": str(run_agent_question(agent, item["question"]))})
+            demo.append({"question": item["question"], "answer": _as_text(run_agent_question(agent, item["question"]))})
     except Exception as exc:  # noqa: BLE001 - demo la optional
         demo.append({"error": f"Agent demo skipped: {exc}"})
     write_json(settings.paths.demo_answers, demo)
