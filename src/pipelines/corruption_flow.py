@@ -5,7 +5,7 @@ from typing import Any
 import pandas as pd
 
 from core.config import load_settings
-from core.utils import now_utc, read_json
+from core.utils import now_utc, read_json, write_json
 from evaluation.metrics import evaluate_pipeline
 from ingestion.cleaning import build_clean_dataframe
 from ingestion.corruption import corrupt_clean_dataframe
@@ -87,6 +87,56 @@ def _print_metrics_table(
 
     print("=" * 86)
     print()
+
+
+def _repair_from_raw(settings) -> tuple[pd.DataFrame, dict[str, Any], dict[str, Any]]:
+    """REPAIR (Idempotent): tai tao tu Raw Preservation, KHONG sua chap tu du lieu ban.
+
+    Tra ve (repaired_df, repaired_quality, repaired_freshness). Raise neu ban phuc hoi van khong dat gate.
+    """
+    raw_records_path = settings.paths.raw_records_json
+    if not raw_records_path.exists():
+        raise FileNotFoundError(
+            f"Khong tim thay raw records tai {raw_records_path}. Hay chay script/run_phase1.py truoc."
+        )
+
+    print("[repair] Tai raw records nguyen ban tu Data Lineage...")
+    records = load_raw_records(raw_records_path)
+    if not records:
+        raise ValueError(f"Khong co ban ghi nao trong {raw_records_path}.")
+
+    print(f"[repair] Tai tao Clean DataFrame tu {len(records)} raw records (Idempotent transformation)...")
+    repaired_df = build_clean_dataframe(records, now_utc())
+
+    # Luu repaired artifacts
+    save_clean_artifacts(
+        repaired_df,
+        settings.paths.repaired_clean_csv,
+        settings.paths.repaired_clean_json,
+    )
+    print(
+        f"[repair] Da luu Repaired artifacts: "
+        f"{settings.paths.repaired_clean_csv.name}, {settings.paths.repaired_clean_json.name}"
+    )
+
+    # Chay Quality Gate va Freshness SLA tren du lieu Repaired
+    print("[repair] Kiem dinh Quality Gate va Freshness SLA tren du lieu Repaired...")
+    repaired_quality = run_data_quality_checks(repaired_df, settings, "repaired")
+
+    repaired_freshness_path = settings.paths.quality_dir / "repaired_freshness_report.json"
+    repaired_freshness = build_freshness_report(repaired_df, settings, repaired_freshness_path)
+
+    if not repaired_quality.get("success"):
+        raise RuntimeError(
+            f"Repaired Quality Gate THAT BAI: {repaired_quality.get('failed_expectations')} loi vi pham!"
+        )
+    if not repaired_freshness.get("is_fresh"):
+        raise RuntimeError("Repaired Freshness SLA THAT BAI bat ngo!")
+
+    print("[repair] Quality Gate: PASSED (100% expectations thoa man)")
+    print("[repair] Freshness SLA: PASSED (Dat tieu chuan do tuoi)")
+
+    return repaired_df, repaired_quality, repaired_freshness
 
 
 def main() -> None:
@@ -222,53 +272,33 @@ def main() -> None:
     print()
 
     # -------------------------------------------------------------------------
-    # BUOC e (tiep): REPAIR (Idempotent: Tai tao tu Raw Preservation)
-    # KHONG BAO GIO sua chap va tu du lieu ban. Ta tai tao doc lap tu raw_records_json.
+    # BUOC e (tiep): Quyet dinh self-healing THAT SU dua tren ket qua gate.
+    # - Gate FAIL  -> cach ly collection loi, tu dong repair tu raw, chi promote khi ban repair PASS.
+    # - Gate PASS  -> khong can repair, promote chinh du lieu vua kiem dinh.
+    # Neu ban repair van FAIL -> raise, serving giu nguyen collection baseline (khong promote gi ca).
     # -------------------------------------------------------------------------
-    raw_records_path = settings.paths.raw_records_json
-    if not raw_records_path.exists():
-        raise FileNotFoundError(
-            f"Khong tim thay raw records tai {raw_records_path}. Hay chay script/run_phase1.py truoc."
-        )
+    if auto_repair_triggered:
+        repaired_df, repaired_quality, repaired_freshness = _repair_from_raw(settings)
+        promoted_collection = settings.repaired_collection_name
+        quarantined_collection: str | None = settings.corrupted_collection_name
+    else:
+        print("[Self-Healing] Gate PASS -> bo qua repair, dung lai du lieu da kiem dinh.")
+        repaired_df, repaired_quality, repaired_freshness = corrupted_df, corrupted_quality, corrupted_freshness
+        save_clean_artifacts(repaired_df, settings.paths.repaired_clean_csv, settings.paths.repaired_clean_json)
+        promoted_collection = settings.repaired_collection_name
+        quarantined_collection = None
 
-    print("[repair] Tai raw records nguyen ban tu Data Lineage...")
-    records = load_raw_records(raw_records_path)
-    if not records:
-        raise ValueError(f"Khong co ban ghi nao trong {raw_records_path}.")
-
-    print(f"[repair] Tai tao Clean DataFrame tu {len(records)} raw records (Idempotent transformation)...")
-    repaired_df = build_clean_dataframe(records, now_utc())
-
-    # Luu repaired artifacts
-    save_clean_artifacts(
-        repaired_df,
-        settings.paths.repaired_clean_csv,
-        settings.paths.repaired_clean_json,
-    )
-    print(
-        f"[repair] Da luu Repaired artifacts: "
-        f"{settings.paths.repaired_clean_csv.name}, {settings.paths.repaired_clean_json.name}"
-    )
-
-    # Chay Quality Gate va Freshness SLA tren du lieu Repaired
-    print("[repair] Kiem dinh Quality Gate va Freshness SLA tren du lieu Repaired...")
-    repaired_quality = run_data_quality_checks(repaired_df, settings, "repaired")
-
-    repaired_freshness_path = settings.paths.quality_dir / "repaired_freshness_report.json"
-    repaired_freshness = build_freshness_report(repaired_df, settings, repaired_freshness_path)
-
-    if not repaired_quality.get("success"):
-        raise RuntimeError(
-            f"Repaired Quality Gate THAT BAI: {repaired_quality.get('failed_expectations')} loi vi pham!"
-        )
-    if not repaired_freshness.get("is_fresh"):
-        raise RuntimeError("Repaired Freshness SLA THAT BAI bat ngo!")
-
-    print("[repair] Quality Gate: PASSED (100% expectations thoa man)")
-    print("[repair] Freshness SLA: PASSED (Dat tieu chuan do tuoi)")
-
-    # Thang cap collection phuc vu sau khi kiem dinh dat chuan
-    promoted_collection = settings.repaired_collection_name
+    # Ghi trang thai serving ra file de lan chay/serving layer sau doc duoc (khong chi in log).
+    serving_state = {
+        "updated_at": now_utc().isoformat(),
+        "serving_collection": promoted_collection,
+        "quarantined_collection": quarantined_collection,
+        "auto_repair_triggered": auto_repair_triggered,
+        "reason": auto_repair_reason,
+        "repaired_quality_success": bool(repaired_quality.get("success")),
+        "repaired_is_fresh": bool(repaired_freshness.get("is_fresh")),
+    }
+    write_json(settings.paths.corrupted_metrics.parent / "serving_state.json", serving_state)
     print(f"[Self-Healing] PHE DUYET: Thang cap collection '{promoted_collection}' lam Serving Collection chinh thuc.")
 
     # Index du lieu da phuc hoi vao collection rieng 'papers-repaired'
@@ -298,7 +328,7 @@ def main() -> None:
     auto_repair_info = {
         "auto_repair_triggered": auto_repair_triggered,
         "reason": auto_repair_reason,
-        "quarantined_collection": settings.corrupted_collection_name,
+        "quarantined_collection": quarantined_collection,
         "promoted_collection": promoted_collection,
     }
 
