@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
-from core.utils import write_text
+from core.config import load_settings
+from core.utils import read_json, write_text
 
 
 def generate_phase1_report(
@@ -259,6 +261,7 @@ def generate_corruption_report(
         "- `papers-corrupted`",
         "- `papers-repaired`",
         "",
+        *_corruption_analysis_lines(baseline_metrics, corrupted_metrics, repaired_metrics, corrupted_quality),
         "## Repair Strategy",
         "",
         "Repair không chỉnh sửa corrupted dataframe và không sử dụng "
@@ -282,3 +285,81 @@ def generate_corruption_report(
 
     with path.open("w", encoding="utf-8") as handle:
         handle.write("\n".join(lines) + "\n")
+
+
+# Tac dong ky vong cua tung loai loi len RAG / Quality Gate (dung de doi chieu voi so lieu thuc te).
+CORRUPTION_EFFECTS = {
+    "drop_latest_records": ("Không (GX không biết bài nào bị thiếu)", "Tài liệu đúng không còn trong index → retrieval miss"),
+    "blank_summary": ("Có — summary length ≥ 30", "Câu hỏi summary trả về rỗng → Token F1 = 0"),
+    "inject_noise": ("Không (độ dài vẫn hợp lệ)", "Câu trả lời chứa từ rác/đảo trật tự → F1 giảm"),
+    "truncate_title": ("Có — title length ≥ 8", "Tra cứu theo tiêu đề chính xác thất bại → phụ thuộc semantic search"),
+    "stale_date": ("Freshness SLA (không phải GX expectation)", "Câu hỏi ngày xuất bản trả sai ngày"),
+    "duplicate_rows": ("Có — paper_id unique", "Top-k bị chiếm bởi bản trùng, ngữ cảnh bị loãng"),
+}
+
+
+def _corruption_analysis_lines(
+    baseline_metrics: dict[str, Any],
+    corrupted_metrics: dict[str, Any],
+    repaired_metrics: dict[str, Any],
+    corrupted_quality: dict[str, Any],
+) -> list[str]:
+    """Bang 6 loi da tiem + phan tich tu artifact thuc te (corruption_log, corrupted_answers)."""
+    settings = load_settings()
+    lines = ["## Injected Corruptions (từ corruption_log.json)", ""]
+    log = read_json(settings.paths.corruption_log) if settings.paths.corruption_log.exists() else []
+    lines += [
+        "| # | Corruption | Số bài bị ảnh hưởng | Rows before → after | GX/SLA phát hiện? | Tác động lên RAG |",
+        "|---:|---|---:|---|---|---|",
+    ]
+    for entry in log:
+        detected, impact = CORRUPTION_EFFECTS.get(entry.get("corruption", ""), ("—", "—"))
+        lines.append(
+            f"| {entry.get('step')} | `{entry.get('corruption')}` | {len(entry.get('affected_paper_ids', []))} | "
+            f"{entry.get('rows_before')} → {entry.get('rows_after')} | {detected} | {impact} |"
+        )
+
+    failed = [r for r in corrupted_quality.get("results", []) if not r.get("success")]
+    lines += ["", "### Expectation bị vi phạm trên dữ liệu Corrupted", ""]
+    lines += [
+        f"- `{r.get('expectation')}` (column `{r.get('column') or 'table'}`): {r.get('unexpected_count')} giá trị lỗi"
+        for r in failed
+    ] or ["- (không có)"]
+
+    lines += ["", "### Câu hỏi bị trả lời sai trên dữ liệu Corrupted (từ corrupted_answers.json)", ""]
+    answers = read_json(settings.paths.corrupted_answers) if settings.paths.corrupted_answers.exists() else []
+    wrong = [a for a in answers if not a.get("retrieval_hit") or a.get("token_f1", 0) < 1.0]
+    if wrong:
+        lines += ["| ID | Loại | Retrieval hit | Token F1 | Judge | Câu trả lời của hệ thống |", "|---|---|:---:|---:|---:|---|"]
+        for a in wrong:
+            answer = str(a.get("answer", "")).replace("|", "\\|").replace("\n", " ")[:90]
+            lines.append(
+                f"| {a.get('id')} | {a.get('question_type')} | {'✅' if a.get('retrieval_hit') else '❌'} | "
+                f"{a.get('token_f1', 0):.2f} | {a.get('judge', {}).get('score')} | {answer} |"
+            )
+    else:
+        lines.append("- Không có câu nào bị sai.")
+
+    def delta(name: str, other: dict[str, Any]) -> str:
+        base, value = baseline_metrics.get(name), other.get(name)
+        return "N/A" if base is None or value is None else f"{value - base:+.4f}"
+
+    lines += [
+        "",
+        "## Phân tích",
+        "",
+        f"- **Suy giảm:** Hit Rate {delta('retrieval_hit_rate', corrupted_metrics)}, "
+        f"Token F1 {delta('mean_token_f1', corrupted_metrics)}, "
+        f"Judge Accuracy {delta('judge_accuracy', corrupted_metrics)} so với Baseline.",
+        f"- **Silent Failure:** hệ thống vẫn trả lời đủ {len(answers)} câu, không raise lỗi nào; "
+        f"{len(wrong)} câu sai/thiếu chỉ lộ ra khi đối chiếu ground truth. "
+        "Chỉ Quality Gate + Freshness SLA đặt TRƯỚC bước index mới cảnh báo được sớm.",
+        "- **Giới hạn của GX:** `drop_latest_records` và `inject_noise` không vi phạm expectation nào "
+        "(số dòng vẫn trong ngưỡng, độ dài summary vẫn hợp lệ) → cần thêm kiểm tra so khớp với nguồn (row count so với raw) "
+        "hoặc kiểm tra ngữ nghĩa để bắt các lỗi này.",
+        f"- **Phục hồi:** Repaired lệch Baseline Hit Rate {delta('retrieval_hit_rate', repaired_metrics)}, "
+        f"Token F1 {delta('mean_token_f1', repaired_metrics)}. Repair tái tạo từ raw nên chạy lại bao nhiêu lần "
+        "cũng cho cùng dataset (idempotent).",
+        "",
+    ]
+    return lines
