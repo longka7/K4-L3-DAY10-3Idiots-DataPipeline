@@ -75,5 +75,210 @@ def generate_corruption_report(
     corrupted_freshness: dict[str, Any],
     repaired_freshness: dict[str, Any],
 ) -> None:
-    """TODO(student): viet markdown report so sanh baseline/corrupted/repaired."""
-    raise NotImplementedError("Student task: implement corruption comparison report.")
+    """Write Markdown report comparing baseline/corrupted/repaired states."""
+
+    path = Path(report_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    corrupted_quality_ok = bool(
+        corrupted_quality.get("success")
+    )
+    repaired_quality_ok = bool(
+        repaired_quality.get("success")
+    )
+
+    corrupted_freshness_ok = bool(
+        corrupted_freshness.get("is_fresh")
+    )
+    repaired_freshness_ok = bool(
+        repaired_freshness.get("is_fresh")
+    )
+
+    corrupted_failed_expectations = corrupted_quality.get(
+        "failed_expectations",
+        0,
+    )
+
+    corrupted_stale_rows = corrupted_freshness.get(
+        "stale_rows",
+        0,
+    )
+
+    corrupted_total_rows = corrupted_freshness.get(
+        "total_rows",
+        0,
+    )
+
+    freshness_threshold = corrupted_freshness.get(
+        "threshold_days",
+        180,
+    )
+
+    max_stale_ratio = corrupted_freshness.get(
+        "max_stale_ratio",
+        0.25,
+    )
+
+    corrupted_stale_ratio = corrupted_freshness.get(
+        "stale_ratio",
+        0.0,
+    )
+
+    repaired_stale_rows = repaired_freshness.get(
+        "stale_rows",
+        0,
+    )
+
+    repaired_total_rows = repaired_freshness.get(
+        "total_rows",
+        0,
+    )
+
+    def metric_value(
+        metrics: dict[str, Any],
+        name: str,
+    ) -> str:
+        value = metrics.get(name)
+
+        if value is None:
+            return "N/A"
+
+        if isinstance(value, float):
+            return f"{value:.4f}"
+
+        return str(value)
+
+    corrupted_quality_text = (
+        "❌ FAILED (Phát hiện lỗi)"
+        if not corrupted_quality_ok
+        else "⚠️ PASSED (không phát hiện lỗi)"
+    )
+
+    repaired_quality_text = (
+        "✅ PASSED (Phục hồi sạch)"
+        if repaired_quality_ok
+        else "❌ FAILED"
+    )
+
+    corrupted_freshness_text = (
+        f"❌ FAILED ({corrupted_stale_rows}/{corrupted_total_rows} "
+        f"rows > {freshness_threshold} ngày)"
+        if not corrupted_freshness_ok
+        else "⚠️ Đạt chuẩn"
+    )
+
+    repaired_freshness_text = (
+        f"✅ PASSED ({repaired_stale_rows}/{repaired_total_rows} "
+        "stale rows)"
+        if repaired_freshness_ok
+        else "❌ FAILED"
+    )
+
+    lines = [
+        "# Corruption / Silent Failure / Repair Report",
+        "",
+        "## Comparison",
+        "",
+        "| Metric / Chỉ số | Baseline (Dữ liệu Sạch) | "
+        "Corrupted (Dữ liệu Bị Lỗi) | "
+        "Repaired (Sau Khi Phục Hồi) |",
+        "| :--- | :--- | :--- | :--- |",
+        (
+            "| **Data Quality Gate** | "
+            "Baseline từ Phase 1 | "
+            f"{corrupted_quality_text} | "
+            f"{repaired_quality_text} |"
+        ),
+        (
+            "| **Kiểm tra Độ Tươi (Freshness)** | "
+            "Baseline từ Phase 1 | "
+            f"{corrupted_freshness_text} | "
+            f"{repaired_freshness_text} |"
+        ),
+        (
+            "| **Retrieval Hit Rate** | "
+            f"{metric_value(baseline_metrics, 'retrieval_hit_rate')} | "
+            f"{metric_value(corrupted_metrics, 'retrieval_hit_rate')} | "
+            f"{metric_value(repaired_metrics, 'retrieval_hit_rate')} |"
+        ),
+        (
+            "| **Mean Token F1** | "
+            f"{metric_value(baseline_metrics, 'mean_token_f1')} | "
+            f"{metric_value(corrupted_metrics, 'mean_token_f1')} | "
+            f"{metric_value(repaired_metrics, 'mean_token_f1')} |"
+        ),
+        (
+            "| **Judge Accuracy** | "
+            f"{metric_value(baseline_metrics, 'judge_accuracy')} | "
+            f"{metric_value(corrupted_metrics, 'judge_accuracy')} | "
+            f"{metric_value(repaired_metrics, 'judge_accuracy')} |"
+        ),
+        (
+            "| **Mean Judge Score** | "
+            f"{metric_value(baseline_metrics, 'mean_judge_score')} | "
+            f"{metric_value(corrupted_metrics, 'mean_judge_score')} | "
+            f"{metric_value(repaired_metrics, 'mean_judge_score')} |"
+        ),
+        "",
+        "## Quality Gate Details",
+        "",
+        (
+            f"- Corrupted: "
+            f"`{'PASSED' if corrupted_quality_ok else 'FAILED'}`"
+        ),
+        (
+            f"- Corrupted failed expectations: "
+            f"`{corrupted_failed_expectations}`"
+        ),
+        (
+            f"- Repaired: "
+            f"`{'PASSED' if repaired_quality_ok else 'FAILED'}`"
+        ),
+        "",
+        "## Freshness Details",
+        "",
+        f"- Threshold: `{freshness_threshold}` days",
+        f"- Maximum stale ratio: `{max_stale_ratio}`",
+        f"- Corrupted stale ratio: `{corrupted_stale_ratio}`",
+        f"- Corrupted stale rows: "
+        f"`{corrupted_stale_rows}/{corrupted_total_rows}`",
+        f"- Repaired stale rows: "
+        f"`{repaired_stale_rows}/{repaired_total_rows}`",
+        "",
+        "## Silent Failure Demonstration",
+        "",
+        "Corrupted data được đưa qua Quality Gate trước. "
+        "Khi Quality Gate FAILED, pipeline **không dừng** mà vẫn "
+        "index và evaluate corrupted data. Đây là chủ ý để chứng minh "
+        "Silent Failure.",
+        "",
+        "Mỗi state sử dụng một embedding artifact / Chroma collection "
+        "riêng:",
+        "",
+        "- `papers-baseline`",
+        "- `papers-corrupted`",
+        "- `papers-repaired`",
+        "",
+        "## Repair Strategy",
+        "",
+        "Repair không chỉnh sửa corrupted dataframe và không sử dụng "
+        "corrupted dataframe làm nguồn phục hồi.",
+        "",
+        "Nguồn phục hồi là:",
+        "",
+        "```text",
+        "raw_records_json",
+        "    -> load_raw_records()",
+        "    -> build_clean_dataframe(records, now_utc())",
+        "    -> repaired clean CSV/JSON",
+        "    -> repaired quality + freshness",
+        "    -> repaired embedding index",
+        "    -> repaired evaluation",
+        "```",
+        "",
+        "Do đó repaired state được tái tạo độc lập từ raw data.",
+        "",
+    ]
+
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write("\n".join(lines) + "\n")
