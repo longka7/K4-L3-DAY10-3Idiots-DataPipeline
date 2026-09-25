@@ -6,3 +6,6 @@ src/*.egg-info/
 lab/
 **/__pycache__/
 doc_verification_report.md
+
+# Generated artifacts containing machine-specific absolute paths
+data/embeddings/*.json
