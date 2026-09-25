@@ -29,11 +29,11 @@
 | :--- | :--- | :---: | :---: | :--- |
 | `expect_table_row_count_to_be_between` | *(Toàn bảng)* | ✅ PASS | ✅ PASS | Đạt chuẩn |
 | `expect_column_values_to_not_be_null` | `paper_id` | ✅ PASS | ✅ PASS | Đạt chuẩn |
-| `expect_column_values_to_be_unique` | `paper_id` | ❌ FAIL (8 lỗi) | ✅ PASS | Vi phạm ngưỡng schema |
+| `expect_column_values_to_be_unique` | `paper_id` | ❌ FAIL (8 lỗi) | ✅ PASS | Bắt lỗi `duplicate_rows` |
 | `expect_column_values_to_not_be_null` | `title` | ✅ PASS | ✅ PASS | Đạt chuẩn |
-| `expect_column_value_lengths_to_be_between` | `title` | ❌ FAIL (4 lỗi) | ✅ PASS | Vi phạm ngưỡng schema |
+| `expect_column_value_lengths_to_be_between` | `title` | ❌ FAIL (4 lỗi) | ✅ PASS | Bắt lỗi `truncate_title` |
 | `expect_column_values_to_not_be_null` | `text_for_embedding` | ✅ PASS | ✅ PASS | Đạt chuẩn |
-| `expect_column_value_lengths_to_be_between` | `summary` | ❌ FAIL (3 lỗi) | ✅ PASS | Vi phạm ngưỡng schema |
+| `expect_column_value_lengths_to_be_between` | `summary` | ❌ FAIL (3 lỗi) | ✅ PASS | Bắt lỗi `blank_summary` |
 
 ---
 

@@ -1,0 +1,9 @@
+{
+  "updated_at": "2026-09-25T10:07:32.549063+00:00",
+  "serving_collection": "papers-repaired",
+  "quarantined_collection": "papers-corrupted",
+  "auto_repair_triggered": true,
+  "reason": "Quality Gate FAILED (3 expectations vi pham); Freshness SLA FAILED (9/23 bai qua han)",
+  "repaired_quality_success": true,
+  "repaired_is_fresh": true
+}

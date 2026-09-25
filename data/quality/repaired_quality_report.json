@@ -1,6 +1,6 @@
 {
   "report_name": "repaired",
-  "engine": "great_expectations 1.23.1",
+  "engine": "great_expectations 1.18.0",
   "success": true,
   "row_count": 24,
   "failed_expectations": 0,
