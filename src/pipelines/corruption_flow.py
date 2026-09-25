@@ -1,24 +1,20 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from core.utils import now_utc
 
 import pandas as pd
 
-from config import load_settings
+from core.config import load_settings
+from core.utils import now_utc
+from evaluation.metrics import evaluate_pipeline
+from ingestion.cleaning import build_clean_dataframe
+from ingestion.corruption import corrupt_clean_dataframe
 from ingestion.crossref import load_raw_records
-from pipelines.cleaning import build_clean_dataframe
-from pipelines.corruption import corrupt_clean_dataframe
-from pipelines.evaluation import evaluate_pipeline
-from pipelines.index import LocalEmbeddingIndex
-from pipelines.quality import (
-    build_freshness_report,
-    run_data_quality_checks,
-)
-
+from observability.quality import build_freshness_report, run_data_quality_checks
+from observability.reporting import generate_corruption_report
+from retrieval.index import LocalEmbeddingIndex
 
 
 def _read_json(path: Path) -> dict[str, Any]:
