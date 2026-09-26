@@ -15,7 +15,7 @@
 | --: | --- | --- | --- | --- |
 | 1 | Nguyễn Long Khánh | 2A202602649 | Trưởng nhóm — Ingestion, Cleaning, Observability, Evaluation, Integration | `ingestion/crossref.py`, `ingestion/cleaning.py`, `observability/quality.py`, `evaluation/testset.py`, `pipelines/phase1.py`, `generate_phase1_report`; tích hợp & sửa `corruption.py`, self-healing gate, judge retry |
 | 2 | Nguyễn Văn An | 2A202602776 | Flow Orchestration, Repair & Comparison Report | `pipelines/corruption_flow.py` (bản hiện tại), `generate_corruption_report`, khung Bonus B2 |
-| 3 | Nguyễn Tuấn Khanh | 2A202602819 | Corruption Suite (bản đầu) | Bản đầu `ingestion/corruption.py`, `corruption_flow.py`, `generate_corruption_report` (sau đó được TV1/TV2 sửa & viết lại) |
+| 3 | Nguyễn Tuấn Khanh | 2A202602819 | Corruption Suite (bản đầu) | Bản đầu `ingestion/corruption.py`, `corruption_flow.py`, `generate_corruption_report` (sau đó được TV1/TV2 refactor để phù hợp với pipeline) |
 
 ## 2. Tóm tắt kết quả
 
@@ -252,5 +252,5 @@ Kết quả khác kỳ vọng: `stale_date` và `inject_noise` không làm giả
 - [x] Bảng metrics khớp với các file trong `data/results/`.
 - [x] Quality/freshness conclusions khớp với `data/quality/`.
 - [x] Các đường dẫn báo cáo và artifact truy cập được.
-- [ ] Mỗi thành viên đã hoàn thành báo cáo vai trò riêng.
+- [x] Mỗi thành viên đã hoàn thành báo cáo vai trò riêng.
 - [x] Không có `.env`, API key, token hoặc secret trong source, report, log hay ảnh.

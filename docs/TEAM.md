@@ -45,11 +45,10 @@ Chi tiết phân công và data contract giữa các thành viên: [`docs/TASKS_
   - Nắm vững nguyên tắc Data Lineage và thiết kế Idempotent Pipeline để khôi phục dữ liệu an toàn từ Raw Source of Truth.
 
 ### ## NguyenTuanKhanh-2A202602819
-> Bản nháp do trưởng nhóm soạn theo lịch sử commit — thành viên tự đọc, chỉnh sửa và commit xác nhận.
 
 - **Vai trò:** TV3 — Corruption Suite.
 - **Công việc chi tiết đã hoàn thành:**
   - Commit `ba9930d`: bản đầu `src/ingestion/corruption.py` (6 dạng lỗi, deterministic, không sửa df gốc, ghi corruption log), bản đầu `src/pipelines/corruption_flow.py` (luồng corrupt → gate → Silent Failure demo → repair từ raw → report → bảng console 3 cột) và bản đầu `generate_corruption_report`.
-  - Sau review, trưởng nhóm sửa import của flow và viết lại tỷ lệ/logic tiêm lỗi; TV2 viết lại flow và report ở bản hiện tại.
+  - Sau review, trưởng nhóm sửa import của flow và viết lại tỷ lệ/logic tiêm lỗi; TV2 viết lại corruption_flow ở bản hiện tại.
 - **Điều học được / Đóng góp chính:**
-  - {{TV3 tự điền}}
+  - Từ việc xây dựng `corruption.py`, tôi hiểu rõ rằng schema dữ liệu cần giữ thống nhất và mỗi lỗi phải có tính deterministic, không sửa dataframe gốc, đồng thời phải rebuild lại các cột suy ra như `age_days` và `text_for_embedding` để Quality Gate/Freshness phản ánh đúng trạng thái dữ liệu. Đây là nền tảng để chứng minh `Silent Failure` và xử lý self-healing ở luồng repair.
